@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SalesPro | Technology for Everyone</title>
+  <meta name="description" content="Shop laptops, desktops, printers, monitors and accessories.">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <a class="sr skip" href="#main">Skip to content</a>
+  <header class="site-header">
+    <div class="nav-row">
+      <a class="brand" href="index.html" aria-label="SalesPro home"><img class="site-logo" src="salespro-logo.png" alt="SalesPro logo"></a>
+      <nav class="main-nav" id="nav" aria-label="Main navigation"><a href="products.html?cat=laptops">Laptops</a><a href="products.html?cat=desktops">Desktops</a><a href="products.html?cat=printers">Printers</a><a href="products.html?cat=accessories">Accessories</a><a href="products.html?cat=monitors">Monitors</a><a href="about.html">About</a><a href="support.html">Support</a></nav>
+      <div class="header-actions">
+        <a class="icon-btn" href="products.html#search" aria-label="Search products"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M20 20l-4-4"/></svg></a>
+        <a class="icon-btn" href="cart.html" aria-label="Shopping cart"><svg viewBox="0 0 24 24"><path d="M3 4h2l2.5 11h10L20 7H6.5"/><circle cx="9" cy="19" r="1.2"/><circle cx="17" cy="19" r="1.2"/></svg><span class="badge" data-n="0"></span></a>
+        <button class="icon-btn menu-toggle" aria-label="Menu" aria-controls="nav" aria-expanded="false"><svg viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h16"/></svg></button>
+      </div>
+    </div>
+  </header>
+  <main id="main">
+    <section class="hero" aria-label="Featured products">
+      <div class="hero-image" role="img" aria-label="Laptop on a modern desk"></div>
+      <div class="hero-content">
+        <p class="eyebrow">SALESPRO.</p>
+        <h1 id="heroTitle">Make room for<br>what’s next.</h1>
+        <p class="hero-copy" id="heroCopy">Meet the new generation of PCs, designed to help you create, connect, and do more.</p>
+        <div class="hero-buttons">
+          <a class="button button-dark" id="heroShop" href="products.html?cat=laptops">Shop PCs</a>
+          <a class="text-link" href="products.html">Explore the lineup <span>→</span></a>
+        </div>
+      </div>
+      <div class="hero-dots" role="group" aria-label="Choose slide">
+        <button class="dot active" aria-label="Slide 1"></button><button class="dot" aria-label="Slide 2"></button><button class="dot" aria-label="Slide 3"></button>
+      </div>
+    </section>
+
+    <section class="section"><div class="wrap">
+      <div class="section-heading"><p class="eyebrow">FIND YOUR FIT</p><h2>Our products</h2><p>Technology to help you work, create, learn, and play.</p></div>
+      <div class="grid g4">
+        <a class="product-card" href="products.html?cat=laptops"><div class="product-image"><img loading="lazy" src="https://images.unsplash.com/photo-1496181133206-80ce9b88a853?auto=format&fit=crop&w=900&q=85" alt="Laptops"></div><h3>Laptops</h3><p>Find the right laptop for your everyday.</p><span class="card-link">Shop laptops →</span></a>
+        <a class="product-card" href="products.html?cat=desktops"><div class="product-image"><img loading="lazy" src="https://images.unsplash.com/photo-1587831990711-23ca6441447b?auto=format&fit=crop&w=900&q=85" alt="Desktops"></div><h3>Desktops</h3><p>Powerful performance for work and home.</p><span class="card-link">Shop desktops →</span></a>
+        <a class="product-card" href="products.html?cat=printers"><div class="product-image"><img loading="lazy" src="https://images.unsplash.com/photo-1612815154858-60aa4c59eaa6?auto=format&fit=crop&w=900&q=85" alt="Printers"></div><h3>Printers</h3><p>Print the things that matter to you.</p><span class="card-link">Shop printers →</span></a>
+        <a class="product-card" href="products.html?cat=monitors"><div class="product-image"><img loading="lazy" src="https://images.unsplash.com/photo-1527443224154-c4a3942d3acf?auto=format&fit=crop&w=900&q=85" alt="Monitors"></div><h3>Monitors</h3><p>Build a setup that works for you.</p><span class="card-link">Shop monitors →</span></a>
+      </div>
+    </div></section>
+
+    <section class="section alt"><div class="wrap">
+      <div class="section-heading"><h2>Popular right now</h2><p>Our customers’ favourites, ready to ship.</p></div>
+      <div class="grid g4" id="featured"></div>
+      <p style="text-align:center;margin-top:30px"><a class="button button-ghost" href="products.html">View all products</a></p>
+    </div></section>
+
+    <section class="section"><div class="wrap">
+      <div class="section-heading"><h2>Why shop with SalesPro</h2><p>Straightforward service from people who know technology.</p></div>
+      <div class="grid g4">
+        <div class="feature"><div class="ico">🚚</div><h3>Free shipping</h3><p>On every order over $500, delivered quickly.</p></div>
+        <div class="feature"><div class="ico">🛡️</div><h3>3-year warranty</h3><p>Cover for peace of mind on all PCs.</p></div>
+        <div class="feature"><div class="ico">↩️</div><h3>30-day returns</h3><p>Not right for you? Send it back, no fuss.</p></div>
+        <div class="feature"><div class="ico">💬</div><h3>Real support</h3><p>Friendly experts, seven days a week.</p></div>
+      </div>
+    </div></section>
+
+    <section class="stats"><div class="wrap grid g4">
+      <div><strong>250K+</strong><span>Happy customers</span></div><div><strong>12</strong><span>Years in business</span></div>
+      <div><strong>4.8/5</strong><span>Average rating</span></div><div><strong>24/7</strong><span>Online help</span></div>
+    </div></section>
+
+    <section class="section"><div class="wrap">
+      <div class="cta">
+        <div><h2>Get news and offers</h2><p>Join our newsletter for new arrivals and member-only deals.</p></div>
+        <form class="news" data-validate><input type="email" required placeholder="Email address" aria-label="Email address"><button class="button button-dark" style="background:#fff;color:var(--ink);border-color:#fff">Subscribe</button></form>
+      </div>
+    </div></section>
+  </main>
+  <footer>
+    <div class="wrap">
+      <div class="foot">
+        <div><img class="site-logo" src="salespro-logo.png" alt="SalesPro logo"><p>Technology to help you work, create, learn, and play.</p></div>
+        <div><h4>Shop</h4><ul><li><a href="products.html?cat=laptops">Laptops</a></li><li><a href="products.html?cat=desktops">Desktops</a></li><li><a href="products.html?cat=printers">Printers</a></li><li><a href="products.html?cat=monitors">Monitors</a></li></ul></div>
+        <div><h4>Company</h4><ul><li><a href="about.html">About us</a></li><li><a href="contact.html">Contact</a></li><li><a href="cart.html">Cart</a></li></ul></div>
+        <div><h4>Support</h4><ul><li><a href="support.html">Help center</a></li><li><a href="support.html#faq">FAQ</a></li><li><a href="contact.html">Talk to us</a></li></ul></div>
+      </div>
+      <p class="copy">© <span class="yr">2026</span> SALESPRO. All rights reserved.</p>
+    </div>
+  </footer>
+  <div class="toast" role="status" aria-live="polite"></div>
+  <script src="script.js"></script>
+</body>
+</html>
