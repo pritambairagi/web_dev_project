@@ -41,6 +41,18 @@ require_once __DIR__ . '/includes/header.php';
       </div>
     </section>
 
+    <section class="section" aria-label="Video">
+      <div class="wrap">
+        <iframe class="home-video"
+          src="https://www.youtube-nocookie.com/embed/N2rfh81I3VQ"
+          title="LG UltraFine evo 32U990A-S Monitor"
+          loading="lazy"
+          referrerpolicy="strict-origin-when-cross-origin"
+          allow="encrypted-media; picture-in-picture"
+          allowfullscreen></iframe>
+      </div>
+    </section>
+
     <!-- Categories Section -->
     <section class="section">
       <div class="wrap">

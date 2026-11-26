@@ -53,6 +53,7 @@ ul{list-style:none}
 
 /* Sections */
 .section{padding:72px 0}.section.alt{background:var(--soft)}
+.home-video{display:block;width:100%;aspect-ratio:16/9;border:0}
 .section-heading{text-align:center;margin:0 auto 38px;max-width:640px}
 .section-heading h2,.page-head h1{font-size:clamp(30px,3.5vw,44px);letter-spacing:-1.2px;font-weight:600;margin-bottom:10px;line-height:1.1}
 .section-heading p{color:var(--muted)}
