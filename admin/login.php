@@ -1,6 +1,5 @@
 <?php
 require_once __DIR__ . '/../config/db.php';
-$pdo = getDbConnection();
 
 $error = '';
 
@@ -10,25 +9,27 @@ if (isset($_SESSION['admin_logged_in']) && $_SESSION['admin_logged_in'] === true
 }
 
 if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST') {
-    $username = trim($_POST['username'] ?? '');
-    $password = trim($_POST['password'] ?? '');
+    $username = is_string($_POST['username'] ?? null) ? trim($_POST['username']) : '';
+    $password = is_string($_POST['password'] ?? null) ? trim($_POST['password']) : '';
 
     if (empty($username) || empty($password)) {
         $error = 'Please enter both username and password.';
     } else {
-        $stmt = $pdo->prepare("SELECT * FROM admins WHERE username = ?");
-        $stmt->execute([$username]);
-        $admin = $stmt->fetch();
-
-        if ($admin && password_verify($password, $admin['password'])) {
-            $_SESSION['admin_logged_in'] = true;
-            $_SESSION['admin_id'] = $admin['id'];
-            $_SESSION['admin_username'] = $admin['username'];
-            $_SESSION['admin_name'] = $admin['name'];
-            header("Location: index.php");
-            exit;
-        } else {
+        try {
+            $stmt = getDbConnection()->prepare("SELECT * FROM admins WHERE username = ?");
+            $stmt->execute([$username]);
+            $admin = $stmt->fetch();
+            if ($admin && password_verify($password, $admin['password'])) {
+                $_SESSION['admin_logged_in'] = true;
+                $_SESSION['admin_id'] = $admin['id'];
+                $_SESSION['admin_username'] = $admin['username'];
+                $_SESSION['admin_name'] = $admin['name'];
+                header("Location: index.php");
+                exit;
+            }
             $error = 'Invalid username or password.';
+        } catch (PDOException $ex) {
+            $error = 'Could not sign in. Please try again.';
         }
     }
 }
@@ -70,7 +71,7 @@ if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST') {
       <form method="POST" action="login.php" class="form">
         <div class="field">
           <label for="username">Username</label>
-          <input type="text" id="username" name="username" required autocomplete="username" value="<?= isset($_POST['username']) ? e($_POST['username']) : 'admin' ?>">
+          <input type="text" id="username" name="username" required autocomplete="username" value="<?= e($username ?? '') ?>">
         </div>
         <div class="field">
           <label for="password">Password</label>
@@ -78,12 +79,6 @@ if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST') {
         </div>
         <button type="submit" class="button button-blue" style="width:100%;margin-top:8px;">Sign In</button>
       </form>
-
-      <div style="margin-top:20px;padding:12px;background:var(--soft);border-radius:var(--r);font-size:12px;color:var(--muted);">
-        <strong>Default Credentials:</strong><br>
-        Username: <code>admin</code><br>
-        Password: <code>admin123</code>
-      </div>
 
       <p style="text-align:center;margin-top:20px;font-size:13px;">
         <a href="../index.php" style="color:var(--blue-d);font-weight:600;">← Back to SalesPro Store</a>

@@ -1,80 +1,85 @@
-# SalesPro - PHP & MySQL E-Commerce Platform
+# SalesPro
 
-A high-performance e-commerce website built with **PHP 8** and **MySQL / MariaDB** (database: `salespro`), converted from static HTML/CSS/JS.
+A PHP 8 and MariaDB e-commerce college project. Customers can register with email verification, sign in with a username or email and password, save shipping addresses, and view carts, orders, receipts, and shipment updates. Guest checkout remains available. Mailpit captures verification and password-reset emails locally, so no domain or email account is needed.
 
-## 🚀 Key Features
+| Open | Local URL |
+| --- | --- |
+| Store | [127.0.0.1:8000](http://127.0.0.1:8000/) |
+| Customer account | [127.0.0.1:8000/account.php](http://127.0.0.1:8000/account.php) |
+| Admin | [127.0.0.1:8000/admin/login.php](http://127.0.0.1:8000/admin/login.php) |
+| Mailpit inbox | [127.0.0.1:8025](http://127.0.0.1:8025/) |
 
-1. **Database-Driven Catalog**:
-   - Products and categories are stored and retrieved from the `salespro` MySQL database.
-   - Dynamic category filtering, search keyword query, and price sorting (low to high, high to low, name, featured).
-   - Dedicated product detail view (`product-detail.php`) with stock checks and related products.
-2. **Shopping Cart & Checkout**:
-   - Session-backed cart with dynamic quantity increment, decrement, and item removal.
-   - Real-time cart badge indicator in the header.
-   - Complete checkout form: Customer Name, Email, Phone, Shipping Address, Payment Method, and Order Notes.
-   - Automatically calculates shipping ($25 or **Free** for orders > $500).
-   - Saves order and line items into `orders` and `order_items` tables.
-   - Generates unique order number (e.g. `SP-20261117-XXXXX`) and printable confirmation receipt (`order-success.php`).
-3. **Contact & Newsletter Inquiries**:
-   - Contact form submissions are validated and stored in `contact_messages`.
-   - Newsletter subscription form saves to `subscribers` table via AJAX.
-4. **Administration Portal (`/admin`)**:
-   - Secure login (`admin/login.php`) with password hashing.
-   - **Dashboard**: Revenue KPIs, Total Orders, Product Count, Inquiries, recent orders and messages.
-   - **Product Management**: Add new products, edit price/stock/details, toggle featured status, delete products.
-   - **Order Management**: View all orders, update status (`Pending`, `Processing`, `Shipped`, `Delivered`, `Cancelled`), view itemized invoice.
-   - **Customer Inquiries**: Read, toggle read/unread status, and delete messages.
-   - **Subscribers**: Manage newsletter subscriber list.
+## Windows 11: college demo
 
----
+1. Install [XAMPP for Windows](https://www.apachefriends.org/download.html) with PHP 8.2 and MariaDB. Use the default location `C:\xampp` or adjust the paths below. Copy the project files to `C:\salespro` (the folder should contain `index.php`, `salespro.sql`, and `migrations`).
+2. Open the XAMPP Control Panel and start **MySQL** (XAMPP's label for MariaDB) and **Apache** to set up the database. Open [phpMyAdmin](http://127.0.0.1/phpmyadmin/).
+   - **Fresh demo database:** From the phpMyAdmin home screen, open **Import** and select `C:\salespro\salespro.sql`. This creates and seeds `salespro`.
+   - **Existing database:** Select `salespro`, open **Export**, and save a SQL backup. **Do not import `salespro.sql`** over existing data; it drops tables.
+   - In either case, select the `salespro` database. If the `customers` table is not present, open **Import** and select `C:\salespro\migrations\001_customer_accounts.sql`. Apply it once. If an import fails partway through, stop rather than rerunning it over a partial schema. After setup, leave MySQL running and stop Apache.
+3. Download the Windows ZIP from [Mailpit releases](https://github.com/axllent/mailpit/releases/latest): `mailpit-windows-amd64.zip` for Intel/AMD or `mailpit-windows-arm64.zip` for ARM. Extract it to `C:\mailpit`. Create a Windows desktop shortcut with this **Target**, then open it:
 
-## 🗄️ Database Setup (`salespro`)
+   ```text
+   "C:\mailpit\mailpit.exe" --listen 127.0.0.1:8025 --smtp 127.0.0.1:1025
+   ```
 
-The database is already configured and initialized with seed data in `salespro.sql`.
+4. Make a second shortcut with the following **Target** and open it to start the store. Keep both shortcut windows open during the demo:
 
-- **Database Name**: `salespro`
-- **Host**: `127.0.0.1` (or `localhost`)
-- **Port**: `3306`
-- **User**: `root`
-- **Password**: *(empty by default on XAMPP)*
+   ```text
+   "C:\xampp\php\php.exe" -c "C:\xampp\php\php.ini" -S 127.0.0.1:8000 -t "C:\salespro"
+   ```
 
-To re-import or reset the database at any time:
-```bash
-mysql -u root -p salespro < salespro.sql
+5. Open the store and Mailpit using the links above. Use `127.0.0.1`, not `localhost`, throughout the demo so email links return to the same browser session. If Windows asks whether to allow incoming network access for these services, decline; local access is enough.
+
+## Linux: development
+
+From the project root, start the existing MariaDB runtime in its own fish terminal:
+
+```fish
+set r "$HOME/Projects/Pritom-Site-Admin&DB"
+env LD_LIBRARY_PATH="$r/root/usr/lib" "$r/root/usr/bin/mariadbd" --no-defaults --basedir="$r/root/usr" --datadir="$r/db" --bind-address=127.0.0.1 --port=3306 --socket="$r/db.sock" --pid-file="$r/db.pid" --skip-name-resolve
 ```
 
-### Tables Overview
-- `categories`: Product categories (Laptops, Desktops, Printers, Monitors, Accessories).
-- `products`: Product catalog with name, slug, price, description, image, stock, featured flag.
-- `orders`: Customer orders, delivery addresses, payment methods, subtotal, shipping fee, total amount, status.
-- `order_items`: Line items linked to orders.
-- `contact_messages`: Contact form submissions with read status.
-- `subscribers`: Email newsletter subscribers.
-- `admins`: Administrative users.
+For a **fresh database only**, import the seed:
 
----
-
-## 🔐 Default Admin Credentials
-
-- **URL**: `http://localhost/admin/` (or `http://localhost:8000/admin/`)
-- **Username**: `admin`
-- **Password**: `admin123`
-
----
-
-## 💻 Running the Application
-
-### Option A: Using Built-in PHP Server (Fastest)
-Run the following in the project directory:
-```bash
-php -S 127.0.0.1:8000
+```fish
+set r "$HOME/Projects/Pritom-Site-Admin&DB"
+env LD_LIBRARY_PATH="$r/root/usr/lib" "$r/root/usr/bin/mariadb" -h 127.0.0.1 -u root < salespro.sql
 ```
-Then open:
-- Store: `http://127.0.0.1:8000`
-- Admin: `http://127.0.0.1:8000/admin`
 
-### Option B: Using XAMPP Apache
-1. Copy or link this folder into `C:\xampp\htdocs\salespro`
-2. Start Apache and MySQL from the XAMPP Control Panel.
-3. Open `http://localhost/salespro/` in your browser.
+If the account migration hasn't been applied, back up the database and apply it once:
 
+```fish
+set r "$HOME/Projects/Pritom-Site-Admin&DB"
+set backup "$HOME/salespro-before-accounts-"(date +%Y%m%d-%H%M%S)".sql"
+umask 077
+env LD_LIBRARY_PATH="$r/root/usr/lib" "$r/root/usr/bin/mariadb-dump" --single-transaction -h 127.0.0.1 -u root salespro > "$backup"; and \
+  env LD_LIBRARY_PATH="$r/root/usr/lib" "$r/root/usr/bin/mariadb" -h 127.0.0.1 -u root salespro < migrations/001_customer_accounts.sql
+```
+
+Download and extract the matching Linux archive from [Mailpit releases](https://github.com/axllent/mailpit/releases/latest). From the extracted directory, run this in a separate terminal:
+
+```fish
+./mailpit --listen 127.0.0.1:8025 --smtp 127.0.0.1:1025
+```
+
+Start PHP in another terminal:
+
+```fish
+set r "$HOME/Projects/Pritom-Site-Admin&DB"
+env LD_LIBRARY_PATH="$r/root/usr/lib" "$r/root/usr/bin/php" -n -d "extension=$r/root/usr/lib/php/modules/pdo_mysql.so" -d "session.save_path=$r/sessions" -S 127.0.0.1:8000 -t "$HOME/Projects/Pritom-Site"
+```
+
+## Demo walkthrough
+
+1. Add a product to your cart before signing in. Register with a demo address such as `student@example.test`, then open the message in Mailpit. Follow the link, confirm with your registration password, and sign in. The guest cart should carry over.
+2. In **Your account**, add a shipping address. Check out from the cart using that address and open the receipt.
+3. In the admin panel, sign in with the seeded demo credentials (`admin` / `admin123`). Open the order and add a carrier and tracking number. Check that the update appears in the customer's order history.
+4. In a separate browser profile, sign in as a different verified customer. The first customer's receipt should not open there. Use **Forgot password** to demonstrate the email reset flow.
+
+### Troubleshooting
+
+- **No email:** Start Mailpit before registering, then use **Resend verification**. The store defaults to SMTP at `127.0.0.1:1025`. If you change ports or the store URL, set `MAILPIT_HOST`, `MAILPIT_PORT`, or `APP_URL` before starting PHP.
+- **Database connection error:** Check that MariaDB is running and `salespro` is imported. The local defaults in `config/db.php` are `127.0.0.1:3306`, user `root`, and a blank password. The PHP runtime needs `pdo_mysql` and `mbstring`.
+- **Port already in use:** Stop the conflicting local service. If you change the PHP port, update `APP_URL` to match or verification links will point to the wrong port.
+
+This setup is for a local demo only. Use dummy data, keep the services off the network, and don't expose the seeded admin credentials or Mailpit inbox on a public host.

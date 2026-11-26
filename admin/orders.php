@@ -2,30 +2,36 @@
 $adminTitle = 'Order Management';
 $activeAdminNav = 'orders';
 
-require_once __DIR__ . '/includes/header.php';
+require_once __DIR__ . '/includes/auth.php';
+require_once __DIR__ . '/../includes/customer-auth.php';
 
 $message = '';
 $error = '';
+$validStatuses = ['Pending', 'Processing', 'Shipped', 'Delivered', 'Cancelled'];
+$orders = [];
 
-// Handle Status Update
-if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST' && isset($_POST['update_status'])) {
-    $orderId = (int)($_POST['order_id'] ?? 0);
-    $newStatus = trim($_POST['status'] ?? '');
-    $validStatuses = ['Pending', 'Processing', 'Shipped', 'Delivered', 'Cancelled'];
-
-    if ($orderId > 0 && in_array($newStatus, $validStatuses, true)) {
-        try {
+try {
+    $pdo = getDbConnection();
+    if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST' && isset($_POST['update_status'])) {
+        $orderId = filter_var($_POST['order_id'] ?? null, FILTER_VALIDATE_INT, ['options' => ['min_range' => 1]]);
+        $newStatus = $_POST['status'] ?? '';
+        if (!csrfValid($_POST['csrf_token'] ?? null)) {
+            http_response_code(403);
+            $error = 'Refresh the page and try again.';
+        } elseif (!$orderId || !in_array($newStatus, $validStatuses, true)) {
+            $error = 'Choose a valid order and status.';
+        } else {
             $updateStmt = $pdo->prepare("UPDATE orders SET status = ? WHERE id = ?");
             $updateStmt->execute([$newStatus, $orderId]);
             $message = "Order #{$orderId} status changed to {$newStatus}.";
-        } catch (Exception $e) {
-            $error = "Failed to update order: " . $e->getMessage();
         }
     }
+    $orders = $pdo->query("SELECT * FROM orders ORDER BY id DESC")->fetchAll();
+    require_once __DIR__ . '/includes/header.php';
+} catch (PDOException $ex) {
+    http_response_code(500);
+    exit('Could not process your order request. Please try again.');
 }
-
-// Fetch all orders
-$orders = $pdo->query("SELECT * FROM orders ORDER BY id DESC")->fetchAll();
 ?>
 
 <div class="wrap" style="padding-top:32px;">
@@ -79,9 +85,10 @@ $orders = $pdo->query("SELECT * FROM orders ORDER BY id DESC")->fetchAll();
                 <td><span style="font-size:12px;color:var(--muted);"><?= e($ord['payment_method']) ?></span></td>
                 <td>
                   <form method="POST" action="orders.php" style="display:flex;gap:6px;align-items:center;">
+                    <input type="hidden" name="csrf_token" value="<?= e(csrfToken()) ?>">
                     <input type="hidden" name="order_id" value="<?= (int)$ord['id'] ?>">
-                    <select name="status" style="padding:4px 8px;font-size:12px;border-radius:4px;">
-                      <?php foreach (['Pending', 'Processing', 'Shipped', 'Delivered', 'Cancelled'] as $st): ?>
+                    <select name="status" aria-label="Order status" style="padding:4px 8px;font-size:12px;border-radius:4px;">
+                      <?php foreach ($validStatuses as $st): ?>
                         <option value="<?= $st ?>" <?= $ord['status'] === $st ? 'selected' : '' ?>><?= $st ?></option>
                       <?php endforeach; ?>
                     </select>

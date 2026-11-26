@@ -10,7 +10,9 @@ if (!isset($activeNav)) {
 }
 
 require_once __DIR__ . '/../config/db.php';
+require_once __DIR__ . '/customer-auth.php';
 $cartCount = getCartCount();
+$headerCustomer = isset($_SESSION['customer_id'], $_SESSION['customer_auth_version']) ? currentCustomer(getDbConnection()) : null;
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -19,6 +21,7 @@ $cartCount = getCartCount();
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title><?= e($pageTitle) ?></title>
   <meta name="description" content="<?= e($pageDescription) ?>">
+  <meta name="csrf-token" content="<?= e(csrfToken()) ?>">
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
@@ -36,6 +39,9 @@ $cartCount = getCartCount();
         <a href="contact.php" class="<?= $activeNav === 'contact' ? 'active' : '' ?>">Contact</a>
       </nav>
       <div class="header-actions">
+        <a class="icon-btn" href="<?= $headerCustomer ? 'account.php' : 'login.php' ?>" aria-label="<?= $headerCustomer ? 'Account' : 'Sign in' ?>" title="<?= $headerCustomer ? 'Account' : 'Sign in' ?>">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4.4 3.6-7 8-7s8 2.6 8 7"/></svg>
+        </a>
         <a class="icon-btn" href="products.php#search" aria-label="Search products" title="Search products">
           <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M20 20l-4-4"/></svg>
         </a>
@@ -49,4 +55,3 @@ $cartCount = getCartCount();
       </div>
     </div>
   </header>
-

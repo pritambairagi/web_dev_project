@@ -2,34 +2,74 @@
 $adminTitle = 'Order Details';
 $activeAdminNav = 'orders';
 
-require_once __DIR__ . '/includes/header.php';
+require_once __DIR__ . '/includes/auth.php';
+require_once __DIR__ . '/../includes/customer-auth.php';
 
-$id = isset($_GET['id']) ? (int)$_GET['id'] : 0;
+$id = filter_var($_GET['id'] ?? null, FILTER_VALIDATE_INT);
+$statuses = ['Pending', 'Processing', 'Shipped', 'Delivered', 'Cancelled'];
+$trackingUrlValid = static fn (string $url): bool => strlen($url) <= 500
+    && filter_var($url, FILTER_VALIDATE_URL)
+    && in_array(strtolower((string)parse_url($url, PHP_URL_SCHEME)), ['http', 'https'], true);
 
-$stmt = $pdo->prepare("SELECT * FROM orders WHERE id = ?");
-$stmt->execute([$id]);
-$order = $stmt->fetch();
+try {
+    $pdo = getDbConnection();
+    $stmt = $pdo->prepare("SELECT * FROM orders WHERE id = ?");
+    $stmt->execute([$id ?: 0]);
+    $order = $stmt->fetch();
 
-if (!$order) {
-    header("Location: orders.php");
-    exit;
+    if (!$order) {
+        header("Location: orders.php");
+        exit;
+    }
+
+    $itemStmt = $pdo->prepare("SELECT oi.*, p.image_url
+                               FROM order_items oi
+                               LEFT JOIN products p ON oi.product_id = p.id
+                               WHERE oi.order_id = ?");
+    $itemStmt->execute([$order['id']]);
+    $items = $itemStmt->fetchAll();
+} catch (PDOException $ex) {
+    http_response_code(500);
+    exit('Could not load this order. Please try again.');
 }
 
-// Fetch order items
-$itemStmt = $pdo->prepare("SELECT oi.*, p.image_url 
-                           FROM order_items oi 
-                           LEFT JOIN products p ON oi.product_id = p.id 
-                           WHERE oi.order_id = ?");
-$itemStmt->execute([$order['id']]);
-$items = $itemStmt->fetchAll();
-
 $message = '';
+$error = '';
 if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST' && isset($_POST['update_status'])) {
-    $newStatus = trim($_POST['status'] ?? '');
-    $updateStmt = $pdo->prepare("UPDATE orders SET status = ? WHERE id = ?");
-    $updateStmt->execute([$newStatus, $order['id']]);
-    $order['status'] = $newStatus;
-    $message = "Status updated to {$newStatus}.";
+    $newStatus = $_POST['status'] ?? '';
+    $tracking = [];
+    foreach (['tracking_carrier' => 100, 'tracking_number' => 120, 'tracking_url' => 500] as $field => $limit) {
+        $value = $_POST[$field] ?? '';
+        if (!is_string($value) || strlen(trim($value)) > $limit) {
+            $error = 'Check the tracking field lengths.';
+            break;
+        }
+        $tracking[$field] = trim($value) === '' ? null : trim($value);
+    }
+    if (!csrfValid($_POST['csrf_token'] ?? null)) {
+        http_response_code(403);
+        $error = 'Refresh the page and try again.';
+    } elseif (!in_array($newStatus, $statuses, true)) {
+        $error = 'Choose a valid order status.';
+    } elseif (isset($tracking['tracking_url']) && !$trackingUrlValid($tracking['tracking_url'])) {
+        $error = 'Enter a valid HTTP or HTTPS tracking URL.';
+    }
+    if ($error === '') {
+        try {
+            $updateStmt = $pdo->prepare('UPDATE orders SET status = ?, tracking_carrier = ?, tracking_number = ?, tracking_url = ? WHERE id = ?');
+            $updateStmt->execute([$newStatus, ...array_values($tracking), $order['id']]);
+            $order = array_replace($order, $tracking, ['status' => $newStatus]);
+            $message = 'Order updated.';
+        } catch (PDOException $ex) {
+            $error = 'Could not update this order. Please try again.';
+        }
+    }
+}
+try {
+    require_once __DIR__ . '/includes/header.php';
+} catch (PDOException $ex) {
+    http_response_code(500);
+    exit('Could not load this order. Please try again.');
 }
 ?>
 
@@ -37,6 +77,11 @@ if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST' && isset($_POST['update_status
   <?php if (!empty($message)): ?>
     <div style="background:#def7ec;color:#03543f;padding:12px 18px;border-radius:var(--r);margin-bottom:20px;font-weight:600;">
       <?= e($message) ?>
+    </div>
+  <?php endif; ?>
+  <?php if ($error !== ''): ?>
+    <div role="alert" style="background:#fde8e8;color:#9b1c1c;padding:12px 18px;border-radius:var(--r);margin-bottom:20px;">
+      <?= e($error) ?>
     </div>
   <?php endif; ?>
 
@@ -47,17 +92,39 @@ if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST' && isset($_POST['update_status
         <h1 style="font-size:24px;margin-top:6px;">Order <?= e($order['order_number']) ?></h1>
         <span style="font-size:13px;color:var(--muted);">Placed: <?= date('F j, Y, g:i A', strtotime($order['created_at'])) ?></span>
       </div>
-      <div>
-        <form method="POST" style="display:flex;gap:8px;align-items:center;">
-          <select name="status" style="font-size:14px;padding:6px 12px;">
-            <?php foreach (['Pending', 'Processing', 'Shipped', 'Delivered', 'Cancelled'] as $st): ?>
+    </div>
+
+    <form method="POST" class="form" style="margin-bottom:24px;">
+      <input type="hidden" name="csrf_token" value="<?= e(csrfToken()) ?>">
+      <div class="grid g2">
+        <div class="field">
+          <label for="status">Status *</label>
+          <select id="status" name="status" required>
+            <?php foreach ($statuses as $st): ?>
               <option value="<?= $st ?>" <?= $order['status'] === $st ? 'selected' : '' ?>><?= $st ?></option>
             <?php endforeach; ?>
           </select>
-          <button type="submit" name="update_status" value="1" class="button button-blue button-sm">Update Status</button>
-        </form>
+        </div>
+        <div class="field">
+          <label for="tracking_carrier">Carrier (optional)</label>
+          <input id="tracking_carrier" name="tracking_carrier" maxlength="100" value="<?= e($order['tracking_carrier'] ?? '') ?>">
+        </div>
+        <div class="field">
+          <label for="tracking_number">Tracking number (optional)</label>
+          <input id="tracking_number" name="tracking_number" maxlength="120" value="<?= e($order['tracking_number'] ?? '') ?>">
+        </div>
+        <div class="field">
+          <label for="tracking_url">Tracking URL (optional)</label>
+          <input id="tracking_url" name="tracking_url" type="url" maxlength="500" value="<?= e($order['tracking_url'] ?? '') ?>">
+        </div>
       </div>
-    </div>
+      <div>
+        <button type="submit" name="update_status" value="1" class="button button-blue button-sm">Update order</button>
+        <?php if ($trackingUrlValid($order['tracking_url'] ?? '')): ?>
+          <a class="button button-ghost button-sm" href="<?= e($order['tracking_url']) ?>" target="_blank" rel="noopener noreferrer">Open tracking link</a>
+        <?php endif; ?>
+      </div>
+    </form>
 
     <div class="grid g2" style="margin-bottom:24px;">
       <div style="background:var(--soft);padding:18px;border-radius:var(--r);">

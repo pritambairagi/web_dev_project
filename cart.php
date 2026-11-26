@@ -4,86 +4,128 @@ $pageDescription = 'Review your cart items and complete checkout at SalesPro.';
 $activeNav = '';
 
 require_once __DIR__ . '/config/db.php';
-$pdo = getDbConnection();
+require_once __DIR__ . '/includes/customer-auth.php';
+header('Cache-Control: private, no-store');
 
 $error = '';
-$cartData = getCartDetails($pdo);
+$cartData = ['items' => [], 'subtotal' => 0, 'shipping' => 0, 'total' => 0];
+$addresses = [];
+$defaultAddress = [];
+$customer = null;
+$addressId = $name = $email = $phone = $address = $paymentMethod = $notes = '';
+$post = ($_SERVER['REQUEST_METHOD'] ?? '') === 'POST';
+$postText = static fn ($key, $default = '') => is_string($_POST[$key] ?? null) ? trim($_POST[$key]) : $default;
+$payments = [
+    'Cash on Delivery' => 'Cash on Delivery (COD)',
+    'Bank Transfer' => 'Direct Bank Transfer',
+    'Mobile Payment' => 'bKash / Nagad / Rocket',
+    'Credit / Debit Card' => 'Credit / Debit Card',
+];
 
-// Handle Checkout Submission
-if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST' && isset($_POST['place_order'])) {
-    if (empty($cartData['items'])) {
-        $error = 'Your cart is empty. Please add items before placing an order.';
-    } else {
-        $name = trim($_POST['name'] ?? '');
-        $email = trim($_POST['email'] ?? '');
-        $phone = trim($_POST['phone'] ?? '');
-        $address = trim($_POST['address'] ?? '');
-        $paymentMethod = trim($_POST['payment_method'] ?? 'Cash on Delivery');
-        $notes = trim($_POST['notes'] ?? '');
+try {
+    $pdo = getDbConnection();
+    $customer = currentCustomer($pdo);
+    $customerId = $customer['id'] ?? null;
+    if ($customerId !== null) {
+        $stmt = $pdo->prepare('SELECT id, label, recipient_name, phone, address_text, is_default
+            FROM customer_addresses WHERE customer_id = ? ORDER BY is_default DESC, id');
+        $stmt->execute([$customerId]);
+        $addresses = $stmt->fetchAll(PDO::FETCH_UNIQUE);
+        $firstAddress = reset($addresses);
+        if (!empty($firstAddress['is_default'])) {
+            $defaultAddress = $firstAddress;
+        }
+    }
+    $addressId = $post ? $postText('address_id') : ($defaultAddress ? (string)key($addresses) : '');
+    $name = $postText('name', $defaultAddress['recipient_name'] ?? $customer['name'] ?? '');
+    $email = $customer['email'] ?? $postText('email');
+    $defaultPhone = trim($defaultAddress['phone'] ?? '');
+    $phone = $post
+        ? $postText('phone')
+        : ($defaultPhone !== '' ? $defaultPhone : trim($customer['phone'] ?? ''));
+    $address = $postText('address', $defaultAddress['address_text'] ?? '');
+    $paymentMethod = $postText('payment_method', 'Cash on Delivery');
+    $notes = $postText('notes');
 
-        if (empty($name) || empty($email) || empty($phone) || empty($address)) {
-            $error = 'Please fill in all required shipping fields.';
-        } elseif (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
-            $error = 'Please provide a valid email address.';
-        } else {
-            try {
-                $pdo->beginTransaction();
+    if ($post) {
+        if (!csrfValid($_POST['csrf_token'] ?? null)) {
+            http_response_code(403);
+            throw new DomainException('Refresh the page and try again.');
+        }
+        if ($addressId !== '') {
+            if (!isset($addresses[$addressId])) {
+                throw new DomainException('Choose one of your saved addresses or enter a delivery address.');
+            }
+            $name = $addresses[$addressId]['recipient_name'];
+            $savedPhone = trim($addresses[$addressId]['phone'] ?? '');
+            if ($savedPhone !== '') {
+                $phone = $savedPhone;
+            }
+            $address = $addresses[$addressId]['address_text'];
+        }
+        if ($name === '' || $phone === '' || $address === '' || !filter_var($email, FILTER_VALIDATE_EMAIL)
+            || strlen($name) > 150 || strlen($email) > 150 || strlen($phone) > 50
+            || strlen($address) > 65535 || strlen($notes) > 65535 || !isset($payments[$paymentMethod])) {
+            throw new DomainException('Check your shipping information and payment method.');
+        }
 
-                // Unique Order Number
-                $orderNumber = 'SP-' . date('Ymd') . '-' . strtoupper(substr(uniqid(), -5));
-
-                // Insert into orders table
-                $stmt = $pdo->prepare("INSERT INTO orders 
-                    (order_number, customer_name, customer_email, customer_phone, shipping_address, payment_method, subtotal, shipping_fee, total_amount, status, notes) 
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'Pending', ?)");
-                $stmt->execute([
-                    $orderNumber,
-                    $name,
-                    $email,
-                    $phone,
-                    $address,
-                    $paymentMethod,
-                    $cartData['subtotal'],
-                    $cartData['shipping'],
-                    $cartData['total'],
-                    $notes
-                ]);
-                $orderId = $pdo->lastInsertId();
-
-                // Insert order items
-                $itemStmt = $pdo->prepare("INSERT INTO order_items 
-                    (order_id, product_id, product_name, price, quantity, total_price) 
-                    VALUES (?, ?, ?, ?, ?, ?)");
-
-                // Optionally reduce stock
-                $stockStmt = $pdo->prepare("UPDATE products SET stock = GREATEST(0, stock - ?) WHERE id = ?");
-
-                foreach ($cartData['items'] as $item) {
-                    $itemStmt->execute([
-                        $orderId,
-                        $item['id'],
-                        $item['name'],
-                        $item['price'],
-                        $item['quantity'],
-                        $item['line_total']
-                    ]);
-                    $stockStmt->execute([$item['quantity'], $item['id']]);
-                }
-
-                $pdo->commit();
-
-                // Clear cart in session
-                $_SESSION['cart'] = [];
-
-                // Redirect to success page
-                header("Location: order-success.php?order=" . urlencode($orderNumber));
-                exit;
-
-            } catch (Exception $ex) {
-                $pdo->rollBack();
-                $error = 'Failed to process order: ' . $ex->getMessage();
+        $pdo->beginTransaction();
+        if ($customerId !== null) {
+            lockCustomerCart($pdo, (int)$customerId);
+            if (!currentCustomer($pdo)) {
+                throw new DomainException('Your session expired. Sign in and try again.');
             }
         }
+        $cartData = getCartDetails($pdo);
+        if (!$cartData['items']) {
+            throw new DomainException('Your cart is empty. Add items before placing an order.');
+        }
+
+        $orderNumber = 'SP-' . date('Ymd') . '-' . strtoupper(bin2hex(random_bytes(9)));
+        $stmt = $pdo->prepare("INSERT INTO orders
+            (order_number, customer_id, customer_name, customer_email, customer_phone, shipping_address,
+             payment_method, subtotal, shipping_fee, total_amount, status, notes)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'Pending', ?)");
+        $stmt->execute([$orderNumber, $customerId, $name, $email, $phone, $address, $paymentMethod,
+            $cartData['subtotal'], $cartData['shipping'], $cartData['total'], $notes]);
+        $orderId = $pdo->lastInsertId();
+
+        $itemStmt = $pdo->prepare('INSERT INTO order_items
+            (order_id, product_id, product_name, price, quantity, total_price) VALUES (?, ?, ?, ?, ?, ?)');
+        $stockStmt = $pdo->prepare('UPDATE products SET stock = stock - ? WHERE id = ? AND stock >= ?');
+        $items = $cartData['items'];
+        usort($items, static fn ($a, $b) => $a['id'] <=> $b['id']);
+        foreach ($items as $item) {
+            $stockStmt->execute([$item['quantity'], $item['id'], $item['quantity']]);
+            if ($stockStmt->rowCount() !== 1) {
+                throw new DomainException('An item no longer has enough stock. Update your cart and try again.');
+            }
+            $itemStmt->execute([$orderId, $item['id'], $item['name'], $item['price'], $item['quantity'], $item['line_total']]);
+        }
+
+        if ($customerId !== null) {
+            $pdo->prepare('DELETE FROM customer_cart_items WHERE customer_id = ?')->execute([$customerId]);
+        }
+        $pdo->commit();
+        if ($customerId === null) {
+            unset($_SESSION['cart']);
+            $_SESSION['guest_order_receipts'][$orderNumber] = (int)$orderId;
+        }
+        header('Location: order-success.php?order=' . urlencode($orderNumber), true, 303);
+        exit;
+    }
+} catch (Throwable $ex) {
+    if (isset($pdo) && $pdo->inTransaction()) {
+        $pdo->rollBack();
+    }
+    $error = $ex instanceof DomainException ? $ex->getMessage() : 'Could not process checkout. Please try again.';
+}
+
+if (isset($pdo)) {
+    try {
+        $cartData = getCartDetails($pdo);
+    } catch (Throwable $ex) {
+        $error = 'Could not load your cart. Please try again.';
     }
 }
 
@@ -146,15 +188,31 @@ require_once __DIR__ . '/includes/header.php';
               <div class="panel" style="margin-top:32px;">
                 <h2 style="font-size:22px;margin-bottom:16px;">Shipping & Customer Information</h2>
                 <form method="POST" action="cart.php" class="form" id="checkoutForm" data-validate>
+                  <input type="hidden" name="csrf_token" value="<?= e(csrfToken()) ?>">
+                  <?php if ($addresses): ?>
+                    <div class="field">
+                      <label for="address_id">Delivery address *</label>
+                      <select id="address_id" name="address_id">
+                        <option value="">Enter an address manually</option>
+                        <?php foreach ($addresses as $id => $saved): ?>
+                          <option value="<?= (int)$id ?>" <?= $addressId === (string)$id ? 'selected' : '' ?>
+                            data-name="<?= e($saved['recipient_name']) ?>" data-phone="<?= e(trim($saved['phone'] ?? '')) ?>"
+                            data-address="<?= e($saved['address_text']) ?>">
+                            <?= e($saved['label'] . ' - ' . $saved['address_text']) ?>
+                          </option>
+                        <?php endforeach; ?>
+                      </select>
+                    </div>
+                  <?php endif; ?>
                   <div class="grid g2">
                     <div class="field">
                       <label for="name">Full Name *</label>
-                      <input id="name" name="name" type="text" required placeholder="John Doe" value="<?= isset($_POST['name']) ? e($_POST['name']) : '' ?>">
+                      <input id="name" name="name" type="text" <?= !$addresses ? 'required' : '' ?> maxlength="150" placeholder="John Doe" value="<?= e($name) ?>">
                       <span class="err"></span>
                     </div>
                     <div class="field">
                       <label for="email">Email Address *</label>
-                      <input id="email" name="email" type="email" required placeholder="john@example.com" value="<?= isset($_POST['email']) ? e($_POST['email']) : '' ?>">
+                      <input id="email" name="email" type="email" required <?= $customer ? 'readonly' : '' ?> maxlength="150" placeholder="john@example.com" value="<?= e($email) ?>">
                       <span class="err"></span>
                     </div>
                   </div>
@@ -162,16 +220,15 @@ require_once __DIR__ . '/includes/header.php';
                   <div class="grid g2">
                     <div class="field">
                       <label for="phone">Phone Number *</label>
-                      <input id="phone" name="phone" type="tel" required placeholder="+880 1XXXXXXXXX" value="<?= isset($_POST['phone']) ? e($_POST['phone']) : '' ?>">
+                      <input id="phone" name="phone" type="tel" <?= !$addresses ? 'required' : '' ?> maxlength="50" placeholder="+880 1XXXXXXXXX" value="<?= e($phone) ?>">
                       <span class="err"></span>
                     </div>
                     <div class="field">
                       <label for="payment_method">Payment Method</label>
                       <select id="payment_method" name="payment_method">
-                        <option value="Cash on Delivery">Cash on Delivery (COD)</option>
-                        <option value="Bank Transfer">Direct Bank Transfer</option>
-                        <option value="Mobile Payment">bKash / Nagad / Rocket</option>
-                        <option value="Credit / Debit Card">Credit / Debit Card</option>
+                        <?php foreach ($payments as $value => $label): ?>
+                          <option value="<?= e($value) ?>" <?= $value === $paymentMethod ? 'selected' : '' ?>><?= e($label) ?></option>
+                        <?php endforeach; ?>
                       </select>
                       <span class="err"></span>
                     </div>
@@ -179,13 +236,13 @@ require_once __DIR__ . '/includes/header.php';
 
                   <div class="field">
                     <label for="address">Delivery Street Address *</label>
-                    <textarea id="address" name="address" rows="3" required placeholder="Full street address, city, postal code"><?= isset($_POST['address']) ? e($_POST['address']) : '' ?></textarea>
+                    <textarea id="address" name="address" rows="3" <?= !$addresses ? 'required' : '' ?> placeholder="Full street address, city, postal code"><?= e($address) ?></textarea>
                     <span class="err"></span>
                   </div>
 
                   <div class="field">
                     <label for="notes">Order Notes (Optional)</label>
-                    <input id="notes" name="notes" type="text" placeholder="Special delivery instructions, preferred delivery time, etc." value="<?= isset($_POST['notes']) ? e($_POST['notes']) : '' ?>">
+                    <input id="notes" name="notes" type="text" placeholder="Special delivery instructions, preferred delivery time, etc." value="<?= e($notes) ?>">
                   </div>
 
                   <button type="submit" name="place_order" value="1" class="button button-blue" style="width:100%;margin-top:10px;font-size:16px;">

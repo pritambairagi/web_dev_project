@@ -63,8 +63,14 @@
 
   /* API Helper */
   function apiCart(action, data, callback) {
+    var csrf = $('meta[name="csrf-token"]');
+    if (!csrf || !csrf.content) {
+      callback({ success: false, message: "Refresh the page and try again." });
+      return;
+    }
     var formData = new FormData();
     formData.append("action", action);
+    formData.append("csrf_token", csrf.content);
     for (var k in data) {
       if (data.hasOwnProperty(k)) formData.append(k, data[k]);
     }
@@ -78,6 +84,7 @@
       })
       .catch(function (err) {
         console.error("Cart API error:", err);
+        callback({ success: false, message: "Could not update your cart. Please try again." });
       });
   }
 
@@ -160,6 +167,8 @@
             updateBadge(res.count);
             // Refresh cart display or reload to reflect new totals cleanly
             location.reload();
+          } else {
+            toast(res.message);
           }
         });
       }
@@ -171,10 +180,33 @@
             updateBadge(res.count);
             toast("Item removed from cart");
             location.reload();
+          } else {
+            toast(res.message);
           }
         });
       }
     });
+  }
+
+  var savedAddress = $("#checkoutForm #address_id");
+  if (savedAddress) {
+    var addressFields = $$("#checkoutForm #name, #checkoutForm #phone, #checkoutForm #address");
+    var manualAddress = {};
+    addressFields.forEach(function (field) {
+      manualAddress[field.id] = field.value;
+      field.addEventListener("input", function () { manualAddress[field.id] = field.value; });
+    });
+    function syncAddressFields() {
+      addressFields.forEach(function (field) {
+        var saved = savedAddress.value ? savedAddress.selectedOptions[0].dataset[field.id] : "";
+        var useSaved = !!savedAddress.value && (field.id !== "phone" || !!saved);
+        field.required = !useSaved;
+        field.readOnly = useSaved;
+        field.value = useSaved ? saved : manualAddress[field.id];
+      });
+    }
+    savedAddress.addEventListener("change", syncAddressFields);
+    syncAddressFields();
   }
 
   /* Newsletter AJAX Subscription */

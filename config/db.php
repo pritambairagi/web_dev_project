@@ -5,6 +5,10 @@
  */
 
 if (session_status() === PHP_SESSION_NONE) {
+    ini_set('session.use_strict_mode', '1');
+    ini_set('session.cookie_httponly', '1');
+    ini_set('session.cookie_samesite', 'Lax');
+    ini_set('session.cookie_secure', in_array(strtolower($_SERVER['HTTPS'] ?? ''), ['on', '1'], true) ? '1' : '0');
     session_start();
 }
 
@@ -28,19 +32,7 @@ function getDbConnection() {
             PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
             PDO::ATTR_EMULATE_PREPARES   => false,
         ];
-        try {
-            $pdo = new PDO($dsn, DB_USER, DB_PASS, $options);
-        } catch (PDOException $e) {
-            // Attempt to connect without dbname and create it if missing
-            try {
-                $rootDsn = "mysql:host=" . DB_HOST . ";port=" . DB_PORT . ";charset=utf8mb4";
-                $rootPdo = new PDO($rootDsn, DB_USER, DB_PASS, $options);
-                $rootPdo->exec("CREATE DATABASE IF NOT EXISTS `" . DB_NAME . "` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci");
-                $pdo = new PDO($dsn, DB_USER, DB_PASS, $options);
-            } catch (PDOException $subEx) {
-                die("Database connection failed: " . htmlspecialchars($e->getMessage()));
-            }
-        }
+        $pdo = new PDO($dsn, DB_USER, DB_PASS, $options);
     }
     return $pdo;
 }
@@ -60,20 +52,75 @@ function e($string) {
 }
 
 /**
- * Total item count in session cart
+ * Total item count in the active cart
  */
 function getCartCount() {
-    if (!isset($_SESSION['cart']) || !is_array($_SESSION['cart'])) {
+    if (!isset($_SESSION['customer_id'], $_SESSION['customer_auth_version'])) {
+        return array_sum(guestCartQuantities());
+    }
+    try {
+        return array_sum(cartQuantities(getDbConnection()));
+    } catch (PDOException $ex) {
         return 0;
     }
-    return array_sum($_SESSION['cart']);
+}
+
+function guestCartQuantities(): array {
+    return is_array($_SESSION['cart'] ?? null) ? $_SESSION['cart'] : [];
+}
+
+function cartQuantities(PDO $pdo): array {
+    require_once __DIR__ . '/../includes/customer-auth.php';
+    $customer = currentCustomer($pdo);
+    if (!$customer) {
+        return guestCartQuantities();
+    }
+    $stmt = $pdo->prepare('SELECT product_id, quantity FROM customer_cart_items WHERE customer_id = ? ORDER BY product_id');
+    $stmt->execute([$customer['id']]);
+    return $stmt->fetchAll(PDO::FETCH_KEY_PAIR);
+}
+
+// Every account cart writer takes this lock before reading or changing its rows.
+function lockCustomerCart(PDO $pdo, int $customerId): void {
+    $stmt = $pdo->prepare('SELECT id FROM customers WHERE id = ? FOR UPDATE');
+    $stmt->execute([$customerId]);
+    if (!$stmt->fetchColumn()) {
+        throw new RuntimeException('Customer unavailable');
+    }
+}
+
+function mergeGuestCart(PDO $pdo, int $customerId): void {
+    $cart = guestCartQuantities();
+    if (!$cart) {
+        return;
+    }
+    ksort($cart, SORT_NUMERIC);
+    $pdo->beginTransaction();
+    try {
+        lockCustomerCart($pdo, $customerId);
+        $stmt = $pdo->prepare('INSERT INTO customer_cart_items (customer_id, product_id, quantity)
+            SELECT ?, id, ? FROM products WHERE id = ?
+            ON DUPLICATE KEY UPDATE quantity = LEAST(2147483647, customer_cart_items.quantity + VALUES(quantity))');
+        foreach ($cart as $id => $quantity) {
+            if ((int)$quantity > 0) {
+                $stmt->execute([$customerId, min(2147483647, (int)$quantity), (int)$id]);
+            }
+        }
+        $pdo->commit();
+        unset($_SESSION['cart']);
+    } catch (Throwable $ex) {
+        if ($pdo->inTransaction()) {
+            $pdo->rollBack();
+        }
+        throw $ex;
+    }
 }
 
 /**
  * Fetch detailed cart items with database prices & subtotal
  */
 function getCartDetails($pdo) {
-    $cart = isset($_SESSION['cart']) && is_array($_SESSION['cart']) ? $_SESSION['cart'] : [];
+    $cart = cartQuantities($pdo);
     $items = [];
     $subtotal = 0.0;
 
@@ -142,4 +189,3 @@ function getFlash($key) {
     }
     return null;
 }
-

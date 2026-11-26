@@ -1,29 +1,39 @@
 <?php
 require_once __DIR__ . '/config/db.php';
-$pdo = getDbConnection();
+require_once __DIR__ . '/includes/customer-auth.php';
+header('Cache-Control: private, no-store');
 
-$orderNumber = trim($_GET['order'] ?? '');
+$orderNumber = is_string($_GET['order'] ?? null) ? trim($_GET['order']) : '';
 
 if (empty($orderNumber)) {
     header("Location: index.php");
     exit;
 }
 
-$stmt = $pdo->prepare("SELECT * FROM orders WHERE order_number = ?");
-$stmt->execute([$orderNumber]);
-$order = $stmt->fetch();
+try {
+    $pdo = getDbConnection();
+    $customer = currentCustomer($pdo);
+    $stmt = $pdo->prepare('SELECT * FROM orders WHERE order_number = ?');
+    $stmt->execute([$orderNumber]);
+    $order = $stmt->fetch();
 
-if (!$order) {
-    header("Location: index.php");
-    exit;
+    if (!$order || ($order['customer_id'] === null
+        ? ($_SESSION['guest_order_receipts'][$order['order_number']] ?? null) !== (int)$order['id']
+        : !$customer || (int)$customer['id'] !== (int)$order['customer_id'])) {
+        http_response_code(404);
+        exit('Order not found.');
+    }
+
+    $itemsStmt = $pdo->prepare("SELECT oi.*, p.image_url
+                                FROM order_items oi
+                                LEFT JOIN products p ON oi.product_id = p.id
+                                WHERE oi.order_id = ?");
+    $itemsStmt->execute([$order['id']]);
+    $orderItems = $itemsStmt->fetchAll();
+} catch (PDOException $ex) {
+    http_response_code(500);
+    exit('Could not load your order. Please try again.');
 }
-
-$itemsStmt = $pdo->prepare("SELECT oi.*, p.image_url 
-                            FROM order_items oi 
-                            LEFT JOIN products p ON oi.product_id = p.id 
-                            WHERE oi.order_id = ?");
-$itemsStmt->execute([$order['id']]);
-$orderItems = $itemsStmt->fetchAll();
 
 $pageTitle = 'Order Confirmed - ' . $order['order_number'] . ' | SalesPro';
 $pageDescription = 'Thank you for your order with SalesPro.';
@@ -48,7 +58,6 @@ require_once __DIR__ . '/includes/header.php';
         <div class="panel">
           <div style="display:flex;justify-content:space-between;align-items:flex-start;border-bottom:1px solid var(--line);padding-bottom:18px;margin-bottom:24px;flex-wrap:wrap;gap:16px;">
             <div>
-              <p class="eyebrow" style="margin-bottom:4px;">ORDER DETAILS</p>
               <h2 style="font-size:24px;"><?= e($order['order_number']) ?></h2>
               <span style="font-size:13px;color:var(--muted);">Placed on <?= date('F j, Y, g:i A', strtotime($order['created_at'])) ?></span>
             </div>
@@ -113,4 +122,3 @@ require_once __DIR__ . '/includes/header.php';
   </main>
 
 <?php require_once __DIR__ . '/includes/footer.php'; ?>
-
